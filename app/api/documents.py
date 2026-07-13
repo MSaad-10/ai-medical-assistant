@@ -26,7 +26,7 @@ async def upload_document(
 
     logger.info(f"User {current_user.username} uploading file: {file.filename}")
 
-    # 1. Create a metadata record in SQLite
+    # Metadata record in SQLite
     new_doc = Document(filename=file.filename, user_id=current_user.id)
     db.add(new_doc)
     db.commit()
@@ -34,12 +34,10 @@ async def upload_document(
 
     temp_file_path = ""
     try:
-        # 2. Save the uploaded file temporarily to disk
         with NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             shutil.copyfileobj(file.file, temp_file)
             temp_file_path = temp_file.name
 
-        # 3. Process the file and store vectors in Redis
         process_and_store_pdf(temp_file_path, new_doc.id, current_user.id)
 
     except Exception as e:
@@ -50,7 +48,6 @@ async def upload_document(
         raise HTTPException(status_code=500, detail="Failed to parse and embed document.")
         
     finally:
-        # 4. Clean up the temporary file from the server
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
 
