@@ -1,4 +1,4 @@
-# 🩺 AI Medical Assistant (RAG Architecture)
+# 🩺 AI Medical Assistant
 
 An enterprise-grade, secure, and real-time AI Medical Assistant built using a **Retrieval-Augmented Generation (RAG)** pipeline. This backend architecture allows authenticated users to securely upload medical documents (PDFs), ask complex clinical questions, and receive context-aware answers streamed in real time, and export their consultation histories as beautifully formatted PDF reports.
 
