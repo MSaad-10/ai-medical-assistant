@@ -1,6 +1,6 @@
 # 🩺 AI Medical Assistant (RAG Architecture)
 
-An enterprise-grade, secure, and real-time AI Medical Assistant built using a **Retrieval-Augmented Generation (RAG)** pipeline. This backend architecture allows authenticated users to securely upload medical documents (PDFs), ask complex clinical questions, and receive context-aware answers streamed in real time.
+An enterprise-grade, secure, and real-time AI Medical Assistant built using a **Retrieval-Augmented Generation (RAG)** pipeline. This backend architecture allows authenticated users to securely upload medical documents (PDFs), ask complex clinical questions, and receive context-aware answers streamed in real time, and export their consultation histories as beautifully formatted PDF reports.
 
 ---
 
@@ -11,6 +11,16 @@ An enterprise-grade, secure, and real-time AI Medical Assistant built using a **
 
 - 📄 **Advanced Document Processing**
   - Extracts text from complex medical PDFs using **PyMuPDF** and utilizes **LangChain** for semantic chunking.
+
+- 🛡️ **Clinical Guardrails & AI Safety**
+  - Optimized system prompts restrict the AI strictly to medical-related topics.
+  - Automated safety checks redirect questions about specific medicine dosages or prescriptions to a legally compliant, hardcoded fallback warning. 
+
+- 💾 **Stateful Chat Memory**
+  - Automatically captures and logs streaming conversations (both patient questions and AI responses) to a local SQLite database for session-based tracking.
+
+- 📋 **Automated PDF Consultation Reports**
+  - Generates beautifully structured, color-coded medical PDF summaries programmatically from database logs via a secure /export endpoint.
 
 - ⚡ **High-Performance Vector Retrieval**
   - Leverages **Redis Stack** as a vector database for lightning-fast similarity search.
@@ -25,7 +35,7 @@ An enterprise-grade, secure, and real-time AI Medical Assistant built using a **
 
 # 🏗️ Architecture & Workflow Pipeline
 
-The application follows a linear **4-step RAG lifecycle**.
+The application follows a linear **5-step RAG lifecycle**.
 
 ## 1. Authentication & State Phase
 
@@ -86,6 +96,21 @@ POST /api/chat/stream
 1. Retrieved document context and the user's query are passed to **Gemini 3.5 Flash**.
 2. A strict system prompt minimizes hallucinations.
 3. The generated response is streamed back chunk-by-chunk using **Server-Sent Events (SSE)**.
+4. Once the stream ends, the entire exchange is logged securely in the `ChatHistory` table.
+
+---
+
+## 5. Report Exporting Phase
+
+- The user exports their consultation history via:
+
+```http
+POST /api/chat/export
+```
+
+1. The API queries the SQLite database for all entries matching the requested `session_id` and the authorized `user_id`.
+2. The backend programmatically formats and renders a medical report styling patient queries in dark blue, assistant answers in dark green, and metadata as header tags.
+3. The file is serialized and sent back directly as a downloadable PDF stream.
 
 ---
 
@@ -98,7 +123,7 @@ POST /api/chat/stream
 | **Vector Database** | Redis Stack |
 | **Relational Database** | SQLite, SQLAlchemy ORM |
 | **Authentication & Security** | JWT (`python-jose`), Passlib (Bcrypt), OAuth2 |
-| **Document Processing** | PyMuPDF (`fitz`) |
+| **Document Processing** | PyMuPDF (`fitz`), FPDF2 (`fpdf2` for clinical PDF reporting) |
 
 ---
 
@@ -110,7 +135,7 @@ ai-medical-assistant/
 │   ├── api/                       # FastAPI Routers
 │   │   ├── auth.py                # Login and JWT generation
 │   │   ├── documents.py           # Secure PDF upload endpoints
-│   │   └── chat.py                # SSE streaming chat endpoints
+│   │   └── chat.py                # Streaming chat and PDF export endpoints
 │   │
 │   ├── core/                      # Global configs, logging, and security
 │   │   ├── config.py              # Environment variables and application settings
@@ -119,11 +144,11 @@ ai-medical-assistant/
 │   │
 │   ├── db/                        # Database connection and schemas
 │   │   ├── database.py            # SQLAlchemy engine and session management
-│   │   └── models.py              # Database table definitions
+│   │   └── models.py              # Database tables (Users, Documents, ChatHistory)
 │   │
 │   ├── services/                  # Core business logic
 │   │   ├── vector_store.py        # PDF parsing, chunking, Redis ingestion
-│   │   └── rag_service.py         # Retrieval, prompting, Gemini streaming
+│   │   └── rag_service.py         # Retrieval, clinical guardrails, Gemini stream
 │   │
 │   └── main.py                    # FastAPI application entry point
 │
@@ -139,8 +164,7 @@ ai-medical-assistant/
 ## 1. Prerequisites
 
 - Python **3.10+**
-- Redis Stack
-- Docker
+- Redis Stack (Docker)
 - Postman
 - Google Gemini API Key
 
@@ -244,19 +268,19 @@ http://127.0.0.1:8000/docs
 
 ---
 
-## 2. Create a User / Login
+## 2. Register / Login & Obtain Token
 
-Use the **Authentication** endpoints to register (if applicable) and obtain a JWT access token.
+Use the registration and token generation schemas in Swagger UI (`/docs`) to authorize your user session and retrieve your JWT access token.
 
 ---
 
 ## 3. Upload a Medical Document
 
-Use the **Documents** endpoint to upload a medical PDF.
+Through the `/api/documents/upload` endpoint, upload your medical test reports (PDF format). This dynamically chunks and vectorizes your data using `gemini-embedding-2`.
 
 ---
 
-## 4. Chat with the AI (Using Postman)
+## 4. Query the AI & Observe Safety Guardrails (Postman)
 
 1. Open **Postman** and create a new `POST` request to
 
@@ -276,6 +300,29 @@ POST http://127.0.0.1:8000/api/chat/stream
 
 4. Click **Send**.
 5. In the Postman response pane at the bottom, click the **down arrow (`↓`)** to expand the line containing the response. You will see the AI stream its medical analysis **chunk-by-chunk** in real-time using **Server-Sent Events (SSE)**.
+6. **Test the Guardrails:** Try querying `"Can you write me a recipe for chocolate cookies?"` (Scope Filter test) or `"What dosage of insulin should I administer?"` (Prescription Disclaimer test) to observe the optimized clinical constraints in action.
+
+---
+
+## 5.  Export Your Stateful Chat History as a PDF Report
+
+1. Open a new tab in Postman and prepare a `POST` request to:
+
+```http
+POST http://127.0.0.1:8000/api/chat/export
+```
+
+2. Under the **Authorization** tab, configure your **JWT Bearer** Token.
+3. In the raw JSON Body, specify the unique session ID you utilized for chatting:
+
+```http
+{
+  "session_id": "test_session_001"
+}
+```
+
+4. Click the down arrow right next to the blue **Send** button and select **"Send and Download"** (or click **Send**, go to the bottom response pane, select **Save Response**, and click **Save to a file**).
+5. Open your newly saved `consultation_test_session_001.pdf` file to view your fully formatted clinical log!
 
 # 🔄 End-to-End RAG Workflow
 
@@ -286,10 +333,10 @@ POST http://127.0.0.1:8000/api/chat/stream
                 Authenticate (JWT)
                        │
                        ▼
-                Upload Medical PDF
-                       │
-                       ▼
-             PyMuPDF Text Extraction
+                Upload Medical PDF ───────────────┐
+                       │                          │
+                       ▼                          ▼
+             PyMuPDF Text Extraction     SQLite (Document Metadata)
                        │
                        ▼
           RecursiveCharacterTextSplitter
@@ -298,13 +345,13 @@ POST http://127.0.0.1:8000/api/chat/stream
             gemini-embedding-2 Embeddings
                        │
                        ▼
-             Redis Stack Vector Store
-                       │
-                       ▼
-                  User Question
-                       │
-                       ▼
-                 Query Embedding
+             Redis Stack Vector Store <──────────────────────────┐
+                       │                                         |
+                       ▼                                         |
+                  User Question                                  |
+                       │                                         | 
+                       ▼                                         |
+                 Query Embedding ────────────────────────────────┘
                        │
                        ▼
           k-NN Similarity Search (Redis)
@@ -314,12 +361,16 @@ POST http://127.0.0.1:8000/api/chat/stream
                        │
                        ▼
              Gemini 3.5 Flash LLM
+          (Strict Clinical Guardrails)
                        │
                        ▼
-              Stream Response via SSE
-                       │
-                       ▼
-                     Client
+              Stream Response via SSE  ──────► SQLite (Saved to ChatHistory)
+                       │                                  │
+                       ▼                                  ▼
+                     Client                      POST /api/chat/export
+                                                          │
+                                                          ▼
+                                                  Download Formatted PDF
 ```
 
 ---
