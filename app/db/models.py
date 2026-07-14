@@ -1,4 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.db.database import Base
@@ -35,3 +37,14 @@ class ChatMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
 
     user = relationship("User", back_populates="chat_messages")
+
+class ChatHistory(Base):
+    """Stores the ongoing conversation between the user and the AI."""
+    __tablename__ = "chat_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True)
+    user_id = Column(Integer, index=True)
+    role = Column(String)  # Will be 'user' or 'assistant'
+    content = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
