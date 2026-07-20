@@ -44,6 +44,7 @@ langgraph-prebuilt==1.1.0
 langgraph-sdk==0.4.2
 langsmith==0.10.2
 loguru==0.7.3
+Markdown==3.10.2
 multidict==6.7.1
 numpy==2.5.1
 orjson==3.11.9
